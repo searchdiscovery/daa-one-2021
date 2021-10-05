@@ -1,0 +1,85 @@
+---
+title: "Google Analytics R Demo"
+author: "Ben Woodard"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+## Hypothesis
+
+**We believe** there are certain days that have higher traffic tahn other days **because** we have noticed more form submissions on those days. **If we are right** then we will choose to send our email campaigns on those days over other weekdays to take advantage of heightened brand awareness.
+
+[Learn more about a data-informed framework for decision making](https://www.searchdiscovery.com/blog/creating-measurement-framework/)
+
+
+```{r setup, warning=FALSE, echo=FALSE, message=FALSE, cache=TRUE}
+## Load common packages
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(googleAuthR)
+library(googleAnalyticsR)
+## setup
+source('gasource.R')
+#use Sys.Date() to help automate the date range
+#dr <- c(Sys.Date()-100, Sys.Date()-5)
+
+#use specific dates to define a targeted date range
+dr <- c('2021-06-01', '2021-09-30')
+
+#Pull the data necessary for the analysis
+df <- google_analytics(viewId = vid,
+                       date_range = dr,
+                       dimensions = 'date',
+                       metrics = 'visits')
+
+knitr::kable(head(df))
+```
+### Variables
+
+1. *daterangeday* - dimension - This is the date in the 'YYYY-mm-dd' format
+2. *visits* - metric - `r mets$description[mets$name =='ga:visits']`
+  
+## Visualize the Data
+
+```{r vizualize data, warning=FALSE, echo=FALSE, message=FALSE}
+df %>%
+  mutate(`Weekday` = wday(date, label = T)) %>%
+  ggplot(aes(`Weekday`, visits, fill = month(date, label = T))) + 
+  geom_col(position = 'dodge') +
+  theme_classic() +
+  theme(legend.title = element_blank()) +
+  labs(title = 'Visits by Weekday and Month')
+```
+
+Well that looks interesting but I can't really tell.  
+
+```{r vizualize data2, warning=FALSE, echo=FALSE, message=FALSE}
+df %>%
+  mutate(`Weekday` = wday(date, label = T)) %>%
+  ggplot(aes(month(date, label = T), visits, fill = Weekday)) + 
+  geom_col(position = 'dodge') +
+  theme_classic() +
+  theme(legend.title = element_blank()) +
+  labs(title = 'Visits by Weekday and Month') +
+  facet_wrap(~Weekday)
+```
+
+Breaking the chart into facets really helps to see that there does appear to be a difference in the trends for each day of the week.  What's the deal with the weekend days though. Maybe if we combine Saturday and Sunday we can get a better idea of weekend trends.
+
+```{r vizualize data3, warning=FALSE, echo=FALSE, message=FALSE}
+df %>%
+  mutate(Weekday = if_else(grepl('Sun|Sat', as.character(wday(date, label = T))), 'Weekend', as.character(wday(date, label = T)))) %>%
+  mutate(Weekday = factor(Weekday, levels = c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Weekend'))) %>%
+  ggplot(aes(month(date, label = T), visits, fill = month(date, label = T))) + 
+  geom_col(position = 'dodge') +
+  theme_classic() +
+  theme(legend.position = 'none', axis.title = element_blank()) +
+  labs(title = 'Visits by Weekday and Month', caption = glue::glue('Dates: {dr[1]} - {dr[2]}')) +
+  facet_wrap(~Weekday)
+```
+
+Well, that looks great but we appear to be missing most of June and it's thrown our visuals off a bit.  Change the `dr` object value and see if that fixes the problem. 
